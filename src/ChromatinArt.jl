@@ -68,23 +68,24 @@ function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outpu
     return stack[:,1]
 end
 
-struct PathLevel
-    paths::Vector{Vector{Int64}}
+struct FractalPath
+    path::Vector{Int64}
+    subpaths::Vector{FractalPath}
     level_of_detail::Int
 end
 
-function generate_fractal_path(width::Int64, height::Int64, n_levels::Int64)::Vector{Vector{Int64}}
+function generate_fractal_path(width::Int64, height::Int64, n_levels::Int64)::Vector{FractalPath}
     # Generate a fractal path of the desired size and with the specified number of levels.
-    result::Vector{PathLevel} = []
+    result::Vector{FractalPath} = []
 
     # Generate the first level directly
     push!(result,
-          PathLevel(
+          FractalPath(
               generate_path(width,height,Vector(1:(width*height)),Vector(1:(width*height))),
+              [],
               1))
     for level in 2:n_levels
         # We need to generate (width * height)^(level - 1) individual levels now.
-        paths::Vector{Vector{Int64}} = []
     end
 
     return result
