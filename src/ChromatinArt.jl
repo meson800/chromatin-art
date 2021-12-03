@@ -3,8 +3,6 @@ module ChromatinArt
 using Random
 using Luxor
 
-greet() = print("Hello World!")
-
 function idx_to_zero_x(width::Int64, idx::Int64)::Int64
     return (idx - 1) % width
 end
@@ -15,70 +13,52 @@ function zero_xy_to_idx(width::Int64, x::Int64, y::Int64)::Int64
     return x + y * width + 1
 end
 
-function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64})::Vector{Int64}
-    n_tiles = width * height
-    pathlen = 1
-    stack = zeros(Int64,n_tiles,2)
-    # Fill directions with (1,2,3,4), generating it randomly
-    directions = hcat([randperm(4) for _ in 1:n_tiles]...) # 4 x n_tiles array
-    bitmask = zeros(Bool,n_tiles)
-
-    # Setup BFS
-    stack[1,1] = rand(inputs)
-    stack[1,2] = 1
-    bitmask[stack[1,1]] = true
-
-    # Iterate until we have a full-length path stopping on one of the valid outputs
-    while pathlen != n_tiles || stack[pathlen,1] ∉ outputs
-        # Check if we have exhausted all options of directions to go
-        if stack[pathlen,2] == 5
-            if pathlen == 1
-                error("Failed to do DFS to get a solution :( Requested input:",stack[1,1], " with outputs: ", outputs)
-            end
-            # Otherwise, reset bitmask and pathlen
-            bitmask[stack[pathlen,1]] = false
-            pathlen = pathlen - 1
-            continue
-        end
-
-        # Try to iterate into a child based on our location. Do the internal
-        # conversion to zero-indexed and back to one-indexed.
-        current_idx = stack[pathlen,1]
-        current_x = idx_to_zero_x(width, current_idx)
-        current_y = idx_to_zero_y(width, current_idx)
-        proposed_direction = directions[stack[pathlen,2],current_idx]
-        stack[pathlen,2] += 1
-        if     proposed_direction == 1
-            proposed_x = current_x + 1
-            proposed_y = current_y
-        elseif proposed_direction == 2
-            proposed_x = current_x - 1
-            proposed_y = current_y
-        elseif proposed_direction == 3
-            proposed_x = current_x
-            proposed_y = current_y + 1
-        elseif proposed_direction == 4
-            proposed_x = current_x
-            proposed_y = current_y - 1
-        end
-        proposed_idx = zero_xy_to_idx(width, proposed_x, proposed_y)
-
-        # Is this step possible? Skip if the piece is already occupied
-        # or if the proposed region exits our desired region
-        if proposed_x < 0 || proposed_x >= width ||
-           proposed_y < 0 || proposed_y >= height ||
-           bitmask[proposed_idx]
-           continue
-        end
-        # Step into this region
-        pathlen = pathlen + 1
-        bitmask[proposed_idx] = true
-        stack[pathlen,1] = proposed_idx
-        stack[pathlen,2] = 1
+# Inspired by https://aip.scitation.org/doi/10.1063/1.2357935
+function hamiltonian_mc_step!(path::Vector{Int64}, width::Int64, height::Int64)
+    if rand(1:2) == 1
+        # Reverse the list before we start
+        reverse!(path)
     end
-    return stack[:,1]
+    # Try to step away from the head
+    dir = rand(1:4)
+    x = idx_to_zero_x(width,path[1])
+    y = idx_to_zero_y(width,path[1])
+    if dir == 1
+        x = x + 1
+    elseif dir == 2
+        x = x - 1
+    elseif dir == 3
+        y = y + 1
+    elseif dir == 4
+        y = y - 1
+    end
+
+    if x < 0 || x >= width || y < 0 || y >= height
+        return
+    end
+    # Otherwise, make a step
+    reverse!(path, 1, indexin(zero_xy_to_idx(width,x,y),path)[1] - 1)
 end
 
+function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64})::Vector{Int64}
+    n_tiles = width * height
+    # Init a Hamiltonian path
+    result = Vector{Int64}(1:n_tiles)
+    # Reverse every other row to get a Hamiltonian starting path
+    for row in 2:2:height
+        reverse!(result, 1 + (row - 1) * width, row * width)
+    end
+
+    # Initalize by doing some random iterations
+    for i in 1:(n_tiles * 10)
+        hamiltonian_mc_step!(result, width, height)
+    end
+
+    while result[1] ∉ inputs  || result[end] ∉ outputs 
+        hamiltonian_mc_step!(result, width, height)
+    end
+    return result
+end
 
 struct FractalStructure
     width::Int64
