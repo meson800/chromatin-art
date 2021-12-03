@@ -93,13 +93,13 @@ end
 function idxes_to_available_outputs(idx1::Int64, idx2::Int64, s::FractalStructure)::Vector{Int64}
     d = idxes_to_dir(idx1, idx2, s.width)
     if d == 1
-        return [1,s.width]
+        return Vector(1:s.width)
     elseif d == 2
-        return [s.width,(s.width * s.height)]
+        return Vector(s.width:s.width:(s.width * s.height))
     elseif d == 3
-        return [(s.width * (s.height - 1) + 1),(s.width * s.height)]
+        return Vector((s.width * (s.height - 1) + 1):(s.width * s.height))
     elseif d == 4
-        return [1,(s.width * (s.height - 1) + 1)]
+        return Vector(1:s.width:(s.width * (s.height - 1) + 1))
     end
 end
 
@@ -120,37 +120,6 @@ function reflect_bc(direction::Int64, idx::Int64, s::FractalStructure)::Int64
     end
 end
 
-# Recursively generates a fractal level
-# starting and ending at specific locations.
-# This returns the final output source used.
-function generate_fractal_level!(fractal_path::FractalPath, incoming::Int64, outgoing::Int64, target_level::Int64, s::FractalStructure)::Int64
-    # Check which level we are on.
-    if fractal_path.level_of_detail < target_level - 1
-        # Recurse inward, passing along the return value
-        curried_retval = generate_fractal_level!(fractal_path.subpaths[1], incoming, outgoing, target_level, s)
-        for subpath in fractal_path.subpaths[2:end]
-            curried_retval = generate_fractal_level!(subpath, incoming, outgoing, target_level, s)
-        end
-        return curried_retval
-    elseif fractal_path.level_of_detail == target_level - 1
-        # Time to create new levels!
-
-    end
-    
-    # Follow the path around the fractal! Start by handling the initial case, where we have to create the first
-    # fractal at level (i+1)
-
-    # This fractal connects the requested incoming idx to a random outgoing on the outgoing side.
-    push!(fractal_path.subpaths, FractalPath(
-        generate_path(s.width, s.height,
-        [incoming], idxes_to_available_outputs(fractal_path.path[1], fractal_path.path[2], s)),
-        [], fractal_path.level_of_detail + 1))
-    # Recursively generate 
-    # For the next N - 2 entries, propogate the incoming/outgoing to match it up
-
-    # For the last entry, use the desired outgoing entry
-end
-
 function generate_fractal_path(structure::FractalStructure)::FractalPath
     # Generate a fractal path of the desired size and with the specified number of levels.
     result::FractalPath = FractalPath(structure, [])
@@ -161,6 +130,8 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
         [1], [(structure.width * structure.height)]
     ))
     for level in 2:structure.n_levels
+        # TODO: for levels > 2, you need to account for the idx swaps once you go every (width * height) tiles,
+        # in order to do the proper "wrap-around boundary conditions"
         # We need to iterate over level i-1 and generate paths as we go.
         # We can vcat them all together as we go along.
         subpaths = []
