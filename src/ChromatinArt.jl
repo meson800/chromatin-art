@@ -217,9 +217,11 @@ end
 
 struct FractalViz
     level_offsets::Vector{Int64}
+    jitter_magnitude::Vector{Float64}
+    polymerase_variance::Vector{Float64}
+    polymerase_base_rate::Float64
     n_chromosomes::Int64
     colors
-    jitter_magnitude::Vector{Float64}
 end
 
 function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
@@ -228,11 +230,18 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
         (path.structure.width * path.structure.height)^level,2) * viz.jitter_magnitude[level],
         -viz.jitter_magnitude[level], viz.jitter_magnitude[level])
         for level in 1:path.structure.n_levels]
+    # Generate polymerase propensities
+    rnap_propensity = [
+        clamp.(1.0 .+ (randn((path.structure.width * path.structure.height)^level) * viz.polymerase_variance[level]),0.0, 5.0)
+        for level in 1:path.structure.n_levels
+    ]
     n_per_chromosome = ceil(Int64, ((path.structure.width * path.structure.height)^path.structure.n_levels) / viz.n_chromosomes)
-    Drawing("Letter", filename)
+    Drawing(2*path.structure.width^path.structure.n_levels, 2*path.structure.height^path.structure.n_levels, filename)
+    setline(0.5)
     newpath()
     move(0,0)
     setcolor(viz.colors[1])
+    polymerase_accum = []
     for i in 1:length(path.paths[end])
         if i % n_per_chromosome == 1
             # New chromosome!
@@ -248,9 +257,28 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
                 ))] for level in 1:path.structure.n_levels]
         x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],1], 1:path.structure.n_levels)
         y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],2], 1:path.structure.n_levels)
-        line(Point(sum(x_offsets), sum(y_offsets)))
+        x_loc = sum(x_offsets)
+        y_loc = sum(y_offsets)
+        line(Point(x_loc, y_loc))
+
+        polymerase_rate = viz.polymerase_base_rate * prod(map(level->rnap_propensity[level][indicies[level]], 1:path.structure.n_levels))
+        if rand() < polymerase_rate
+            push!(polymerase_accum, (x_loc,y_loc))
+        end
     end
     do_action(:stroke)
+
+    # Place polymerases
+    gsave()
+    for polymerase_loc in polymerase_accum
+        setcolor(0.4,0.4,0.4,0.6)
+        circle(polymerase_loc...,0.7,:fill)
+        setcolor(0.4,0.4,0.4,0.9)
+        setline(0.2)
+        circle(polymerase_loc...,0.7,:stroke)
+    end
+    grestore()
+
     finish()
 end
 
