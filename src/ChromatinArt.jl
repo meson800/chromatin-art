@@ -33,7 +33,7 @@ function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outpu
         # Check if we have exhausted all options of directions to go
         if stack[pathlen,2] == 5
             if pathlen == 1
-                error("Failed to do DFS to get a solution :(")
+                error("Failed to do DFS to get a solution :( Requested input:",stack[1,1], " with outputs: ", outputs)
             end
             # Otherwise, reset bitmask and pathlen
             bitmask[stack[pathlen,1]] = false
@@ -113,13 +113,13 @@ end
 function idxes_to_available_outputs(idx1::Int64, idx2::Int64, s::FractalStructure)::Vector{Int64}
     d = idxes_to_dir(idx1, idx2, s.width)
     if d == 1
-        return Vector(1:s.width)
+        return [1,s.width]
     elseif d == 2
-        return Vector(s.width:s.width:(s.width * s.height))
+        return [s.width,(s.width * s.height)]
     elseif d == 3
-        return Vector((s.width * (s.height - 1) + 1):(s.width * s.height))
+        return [(s.width * (s.height - 1) + 1),(s.width * s.height)]
     elseif d == 4
-        return Vector(1:s.width:(s.width * s.height))
+        return [1,(s.width * (s.height - 1) + 1)]
     end
 end
 
@@ -187,7 +187,7 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
         # Create the first subpath
         push!(subpaths, generate_path(
                   structure.width, structure.height,
-                  Vector(1:structure.width),
+                  [1,structure.width],
                   idxes_to_available_outputs(result.paths[level-1][1], result.paths[level-1][2],structure)
         ))
         # For the next N-2 entries, reflect the tile
@@ -223,8 +223,11 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
 end
 
 
+struct FractalViz
+    level_offsets::Vector{Int64}
+end
 
-function draw_fractal_path(path::FractalPath, filename)
+function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
     Drawing("Letter", filename)
     newpath()
     move(0,0)
@@ -236,9 +239,8 @@ function draw_fractal_path(path::FractalPath, filename)
                 path.structure.height)^(
                     path.structure.n_levels - level
                 ))] for level in 1:path.structure.n_levels]
-        x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* 10 .^((path.structure.n_levels-1):-1:0)
-        y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* 10 .^((path.structure.n_levels-1):-1:0)
-        print(x_offsets, y_offsets)
+        x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* viz.level_offsets
+        y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets
         line(Point(sum(x_offsets), sum(y_offsets)))
         print(".")
     end
