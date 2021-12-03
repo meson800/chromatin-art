@@ -14,8 +14,8 @@ function zero_xy_to_idx(width::Int64, x::Int64, y::Int64)::Int64
 end
 
 # Inspired by https://aip.scitation.org/doi/10.1063/1.2357935
-function hamiltonian_mc_step!(path::Vector{Int64}, width::Int64, height::Int64)
-    if rand(1:2) == 1
+function hamiltonian_mc_step!(path, width::Int64, height::Int64)
+    if rand() > 0.5
         # Reverse the list before we start
         reverse!(path)
     end
@@ -37,27 +37,32 @@ function hamiltonian_mc_step!(path::Vector{Int64}, width::Int64, height::Int64)
         return
     end
     # Otherwise, make a step
-    reverse!(path, 1, indexin(zero_xy_to_idx(width,x,y),path)[1] - 1)
+    reverse!(path, 1, findfirst(i->zero_xy_to_idx(width,x,y)==i,path) - 1)
 end
 
 function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64})::Vector{Int64}
+    result = Vector{Int64}(1:(width*height))
+    generate_path!(result, width, height, inputs, outputs)
+    return result
+end
+
+function generate_path!(path_array, width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64})
     n_tiles = width * height
     # Init a Hamiltonian path
-    result = Vector{Int64}(1:n_tiles)
+    path_array[1:end] = 1:n_tiles
     # Reverse every other row to get a Hamiltonian starting path
     for row in 2:2:height
-        reverse!(result, 1 + (row - 1) * width, row * width)
+        reverse!(path_array, 1 + (row - 1) * width, row * width)
     end
 
     # Initialize by doing some random iterations
     for i in 1:(n_tiles * 10)
-        hamiltonian_mc_step!(result, width, height)
+        hamiltonian_mc_step!(path_array, width, height)
     end
 
-    while result[1] ∉ inputs  || result[end] ∉ outputs 
-        hamiltonian_mc_step!(result, width, height)
+    while path_array[1] ∉ inputs  || path_array[end] ∉ outputs 
+        hamiltonian_mc_step!(path_array, width, height)
     end
-    return result
 end
 
 struct FractalStructure
@@ -144,6 +149,7 @@ end
 function generate_fractal_path(structure::FractalStructure)::FractalPath
     # Generate a fractal path of the desired size and with the specified number of levels.
     result::FractalPath = FractalPath(structure, [])
+    n_tiles = structure.width * structure.height
 
     # Generate the first level directly
     push!(result.paths, generate_path(
@@ -151,44 +157,42 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
         [1], [(structure.width * structure.height)]
     ))
     for level in 2:structure.n_levels
-        # TODO: for levels > 2, you need to account for the idx swaps once you go every (width * height) tiles,
-        # in order to do the proper "wrap-around boundary conditions"
         # We need to iterate over level i-1 and generate paths as we go.
-        # We can vcat them all together as we go along.
-        subpaths = []
-        # Create the first subpath
-        push!(subpaths, generate_path(
+        # Create the large path structure
+        push!(result.paths, zeros(Int64,(n_tiles)^level))
+        generate_path!(
+                  @view(result.paths[level][1:n_tiles]),
                   structure.width, structure.height,
                   [1,structure.width],
                   idxes_to_available_outputs(result.paths[level-1][1], result.paths[level-1][2],structure)
-        ))
+        )
         # For the next N-2 entries, reflect the tile
         for i in 2:(length(result.paths[level-1]) - 1)
-            push!(subpaths, generate_path(
+            generate_path!(
+                @view(result.paths[level][(((i-1) * n_tiles) + 1):(i * n_tiles)]),
                 structure.width, structure.height,
                 [reflect_bc(idxes_to_dir(
                         result.paths[level-1][i-1],
                         result.paths[level-1][i],
                         structure),
-                    subpaths[end][end],structure)],
+                    result.paths[level][(i-1) * n_tiles],structure)],
                 idxes_to_available_outputs(
                     result.paths[level-1][i],
                     result.paths[level-1][i+1],
                     structure)
-            ))
+            )
         end
         # Push the last subpath
-        push!(subpaths, generate_path(
+        generate_path!(
+            @view(result.paths[level][(end-n_tiles+1):end]),
             structure.width, structure.height,
             [reflect_bc(idxes_to_dir(
                     result.paths[level-1][end-1],
                     result.paths[level-1][end],
                     structure),
-                subpaths[end][end],structure)],
+                result.paths[level][end-n_tiles],structure)],
             [(structure.width * structure.height)]
-        ))
-        # Concat at get out!
-        push!(result.paths,vcat(subpaths...))
+        )
     end
     return result
 end
