@@ -71,7 +71,7 @@ struct FractalPath
     paths::Vector{Vector{Int64}}
 end 
 
-function idxes_to_dir(idx1::Int64, idx2::Int64, width::Int64)::Int64
+function idxes_to_dir(idx1::Int64, idx2::Int64, s::FractalStructure)::Int64
     # Returns the direction that connects two indexes.
     # direction = 1 => up
     # direction = 2 => right
@@ -82,16 +82,34 @@ function idxes_to_dir(idx1::Int64, idx2::Int64, width::Int64)::Int64
         return 2
     elseif d == -1
         return 4
-    elseif d == width
+    elseif d == s.width
         return 3
-    elseif d == -width
+    elseif d == -s.width
         return 1
     end
+
+    # If we are here, we have a cross-index move. Figure out which side each entry is on
+    side1 = 1:s.width
+    side2 = s.width:s.width:(s.width * s.height)
+    side3 = (s.width * (s.height - 1) + 1):(s.width * s.height)
+    side4 = 1:s.width:(s.width * (s.height - 1) + 1)
+    if idx1 ∈ side1 && idx2 ∈ side3
+        return 1
+    elseif idx1 ∈ side2 && idx2 ∈ side4
+        return 2
+    elseif idx1 ∈ side3 && idx2 ∈ side1
+        return 3
+    elseif idx1 ∈ side4 && idx2 ∈ side2
+        return 4
+    end
+    
+     # If we are here, then something unexpected happen. This is likely a
+     # cross-index move
     error("Unexpected index-index difference!")
 end
 
 function idxes_to_available_outputs(idx1::Int64, idx2::Int64, s::FractalStructure)::Vector{Int64}
-    d = idxes_to_dir(idx1, idx2, s.width)
+    d = idxes_to_dir(idx1, idx2, s)
     if d == 1
         return Vector(1:s.width)
     elseif d == 2
@@ -148,7 +166,7 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
                 [reflect_bc(idxes_to_dir(
                         result.paths[level-1][i-1],
                         result.paths[level-1][i],
-                        structure.width),
+                        structure),
                     subpaths[end][end],structure)],
                 idxes_to_available_outputs(
                     result.paths[level-1][i],
@@ -162,12 +180,11 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
             [reflect_bc(idxes_to_dir(
                     result.paths[level-1][end-1],
                     result.paths[level-1][end],
-                    structure.width),
+                    structure),
                 subpaths[end][end],structure)],
             [(structure.width * structure.height)]
         ))
         # Concat at get out!
-        print(subpaths)
         push!(result.paths,vcat(subpaths...))
     end
     return result
