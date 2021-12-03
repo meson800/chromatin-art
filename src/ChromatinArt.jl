@@ -49,7 +49,7 @@ function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outpu
         reverse!(result, 1 + (row - 1) * width, row * width)
     end
 
-    # Initalize by doing some random iterations
+    # Initialize by doing some random iterations
     for i in 1:(n_tiles * 10)
         hamiltonian_mc_step!(result, width, height)
     end
@@ -64,6 +64,21 @@ struct FractalStructure
     width::Int64
     height::Int64
     n_levels::Int64
+    sides::Vector{Vector{Int64}}
+end
+
+function Fractal(width::Int64, height::Int64, levels::Int64)::FractalStructure
+    return FractalStructure(
+        width,
+        height,
+        levels,
+        [
+            Vector(1:width),
+            Vector(width:width:(width * height)),
+            Vector((width * (height - 1) + 1):(width * height)),
+            Vector(1:width:(width * (height - 1) + 1))
+        ]
+    )
 end
 
 struct FractalPath
@@ -89,17 +104,13 @@ function idxes_to_dir(idx1::Int64, idx2::Int64, s::FractalStructure)::Int64
     end
 
     # If we are here, we have a cross-index move. Figure out which side each entry is on
-    side1 = 1:s.width
-    side2 = s.width:s.width:(s.width * s.height)
-    side3 = (s.width * (s.height - 1) + 1):(s.width * s.height)
-    side4 = 1:s.width:(s.width * (s.height - 1) + 1)
-    if idx1 ∈ side1 && idx2 ∈ side3
+    if idx1 ∈ s.sides[1] && idx2 ∈ s.sides[3]
         return 1
-    elseif idx1 ∈ side2 && idx2 ∈ side4
+    elseif idx1 ∈ s.sides[2] && idx2 ∈ s.sides[4]
         return 2
-    elseif idx1 ∈ side3 && idx2 ∈ side1
+    elseif idx1 ∈ s.sides[3] && idx2 ∈ s.sides[1]
         return 3
-    elseif idx1 ∈ side4 && idx2 ∈ side2
+    elseif idx1 ∈ s.sides[4] && idx2 ∈ s.sides[2]
         return 4
     end
     
@@ -110,15 +121,7 @@ end
 
 function idxes_to_available_outputs(idx1::Int64, idx2::Int64, s::FractalStructure)::Vector{Int64}
     d = idxes_to_dir(idx1, idx2, s)
-    if d == 1
-        return Vector(1:s.width)
-    elseif d == 2
-        return Vector(s.width:s.width:(s.width * s.height))
-    elseif d == 3
-        return Vector((s.width * (s.height - 1) + 1):(s.width * s.height))
-    elseif d == 4
-        return Vector(1:s.width:(s.width * (s.height - 1) + 1))
-    end
+    return s.sides[d]
 end
 
 # Transforms a boundary condition in a certain direction
