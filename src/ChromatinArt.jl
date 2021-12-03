@@ -14,13 +14,13 @@ function zero_xy_to_idx(width::Int64, x::Int64, y::Int64)::Int64
 end
 
 # Inspired by https://aip.scitation.org/doi/10.1063/1.2357935
-function hamiltonian_mc_step!(path, width::Int64, height::Int64)
-    if rand() > 0.5
+function hamiltonian_mc_step!(path, width::Int64, height::Int64, dir::Int64, aux1::Int64, rng)
+    if rand(rng) > 0.5
         # Reverse the list before we start
         reverse!(path)
     end
     # Try to step away from the head
-    dir = rand(1:4)
+    dir = rand(rng, 1:4)
     x = idx_to_zero_x(width,path[1])
     y = idx_to_zero_y(width,path[1])
     if dir == 1
@@ -37,16 +37,22 @@ function hamiltonian_mc_step!(path, width::Int64, height::Int64)
         return
     end
     # Otherwise, make a step
-    reverse!(path, 1, findfirst(i->zero_xy_to_idx(width,x,y)==i,path) - 1)
+    aux1 = 0
+    for i = 1:length(path)
+        if path[i] == zero_xy_to_idx(width, x, y)
+            aux1 = i
+        end
+    end
+    reverse!(path, 1, aux1 - 1)
 end
 
-function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64})::Vector{Int64}
+function generate_path(width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64}, rng)::Vector{Int64}
     result = Vector{Int64}(1:(width*height))
-    generate_path!(result, width, height, inputs, outputs)
+    generate_path!(result, width, height, inputs, outputs, rng)
     return result
 end
 
-function generate_path!(path_array, width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64})
+function generate_path!(path_array, width::Int64, height::Int64, inputs::Vector{Int64}, outputs::Vector{Int64}, rng)
     n_tiles = width * height
     # Init a Hamiltonian path
     path_array[1:end] = 1:n_tiles
@@ -55,13 +61,16 @@ function generate_path!(path_array, width::Int64, height::Int64, inputs::Vector{
         reverse!(path_array, 1 + (row - 1) * width, row * width)
     end
 
+    aux1::Int64 = 0
+    aux2::Int64 = 0
+
     # Initialize by doing some random iterations
     for i in 1:(n_tiles * 10)
-        hamiltonian_mc_step!(path_array, width, height)
+        hamiltonian_mc_step!(path_array, width, height, aux1, aux2, rng)
     end
 
     while path_array[1] ∉ inputs  || path_array[end] ∉ outputs 
-        hamiltonian_mc_step!(path_array, width, height)
+        hamiltonian_mc_step!(path_array, width, height, aux1, aux2, rng)
     end
 end
 
@@ -150,12 +159,16 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
     # Generate a fractal path of the desired size and with the specified number of levels.
     result::FractalPath = FractalPath(structure, [])
     n_tiles = structure.width * structure.height
+    rng = MersenneTwister();
 
     # Generate the first level directly
-    push!(result.paths, generate_path(
+    push!(result.paths, zeros(Int64, n_tiles))
+    generate_path!(
+        result.paths[1],
         structure.width, structure.height,
-        [1], [(structure.width * structure.height)]
-    ))
+        [1], [(structure.width * structure.height)],
+        rng
+    )
     for level in 2:structure.n_levels
         # We need to iterate over level i-1 and generate paths as we go.
         # Create the large path structure
@@ -164,7 +177,8 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
                   @view(result.paths[level][1:n_tiles]),
                   structure.width, structure.height,
                   [1,structure.width],
-                  idxes_to_available_outputs(result.paths[level-1][1], result.paths[level-1][2],structure)
+                  idxes_to_available_outputs(result.paths[level-1][1], result.paths[level-1][2],structure),
+                  rng
         )
         # For the next N-2 entries, reflect the tile
         for i in 2:(length(result.paths[level-1]) - 1)
@@ -179,7 +193,8 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
                 idxes_to_available_outputs(
                     result.paths[level-1][i],
                     result.paths[level-1][i+1],
-                    structure)
+                    structure),
+                rng
             )
         end
         # Push the last subpath
@@ -191,7 +206,8 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
                     result.paths[level-1][end],
                     structure),
                 result.paths[level][end-n_tiles],structure)],
-            [(structure.width * structure.height)]
+            [(structure.width * structure.height)],
+            rng
         )
     end
     return result
@@ -224,5 +240,5 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
 end
 
 # Precompile hints
-generate_path(4,4,[1],[2]);
+generate_path(4,4,[1],[2], MersenneTwister());
 end # module
