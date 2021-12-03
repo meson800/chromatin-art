@@ -2,6 +2,7 @@ module ChromatinArt
 
 using Random
 using Luxor
+using Colors
 
 function idx_to_zero_x(width::Int64, idx::Int64)::Int64
     return (idx - 1) % width
@@ -216,24 +217,38 @@ end
 
 struct FractalViz
     level_offsets::Vector{Int64}
+    n_chromosomes::Int64
+    colors
+    jitter_magnitude::Vector{Float64}
 end
 
 function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
+    # Generate jitter offsets
+    jitter = [clamp.(randn(
+        (path.structure.width * path.structure.height)^level,2) * viz.jitter_magnitude[level],
+        -viz.jitter_magnitude[level], viz.jitter_magnitude[level])
+        for level in 1:path.structure.n_levels]
+    n_per_chromosome = ceil(Int64, ((path.structure.width * path.structure.height)^path.structure.n_levels) / viz.n_chromosomes)
     Drawing("Letter", filename)
     newpath()
     move(0,0)
-    sethue("black")
+    setcolor(viz.colors[1])
     for i in 1:length(path.paths[end])
+        if i % n_per_chromosome == 1
+            # New chromosome!
+            do_action(:stroke)
+            setcolor(viz.colors[ceil(Int64, i / n_per_chromosome)])
+            newpath()
+        end
         indicies = [path.paths[level][
             ceil(Int64,i / (
                 path.structure.width * 
                 path.structure.height)^(
                     path.structure.n_levels - level
                 ))] for level in 1:path.structure.n_levels]
-        x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* viz.level_offsets
-        y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets
+        x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],1], 1:path.structure.n_levels)
+        y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],2], 1:path.structure.n_levels)
         line(Point(sum(x_offsets), sum(y_offsets)))
-        print(".")
     end
     do_action(:stroke)
     finish()
