@@ -276,6 +276,15 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
         setcolor(0.4,0.4,0.4,0.9)
         setline(0.2)
         circle(polymerase_loc...,0.7,:stroke)
+        setcolor(0.6, 0.6, 0.6, 1.0)
+        setline(0.5)
+        dx = randn() * 3
+        dy = randn() * 3
+        drawbezierpath(bezierfrompoints(
+            Point(polymerase_loc...),
+            Point(polymerase_loc[1] + (0.25 * dx) + randn() * 0.3, polymerase_loc[2] + (0.25 * dy)),
+            Point(polymerase_loc[1] + (0.75 * dx) + randn() * 0.3, polymerase_loc[2] + (0.75 * dy)),
+            Point(polymerase_loc[1] + dx, polymerase_loc[2] + dy)), :stroke, close=false)
     end
     grestore()
 
