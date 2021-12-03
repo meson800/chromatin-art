@@ -1,6 +1,7 @@
 module ChromatinArt
 
 using Random
+using Luxor
 
 greet() = print("Hello World!")
 
@@ -219,6 +220,30 @@ function generate_fractal_path(structure::FractalStructure)::FractalPath
         push!(result.paths,vcat(subpaths...))
     end
     return result
+end
+
+
+
+function draw_fractal_path(path::FractalPath, filename)
+    Drawing("Letter", filename)
+    newpath()
+    move(0,0)
+    sethue("black")
+    for i in 1:length(path.paths[end])
+        indicies = [path.paths[level][
+            ceil(Int64,i / (
+                path.structure.width * 
+                path.structure.height)^(
+                    path.structure.n_levels - level
+                ))] for level in 1:path.structure.n_levels]
+        x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* 10 .^((path.structure.n_levels-1):-1:0)
+        y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* 10 .^((path.structure.n_levels-1):-1:0)
+        print(x_offsets, y_offsets)
+        line(Point(sum(x_offsets), sum(y_offsets)))
+        print(".")
+    end
+    do_action(:stroke)
+    finish()
 end
 
 # Precompile hints
