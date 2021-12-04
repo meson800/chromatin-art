@@ -220,8 +220,22 @@ struct FractalViz
     jitter_magnitude::Vector{Float64}
     polymerase_variance::Vector{Float64}
     polymerase_base_rate::Float64
+    swirl_strength::Float64
+    swirl_dropoff::Float64
     n_chromosomes::Int64
     colors
+end
+
+function swirl_transform(strength::Float64, dropoff::Float64, total_width::Int64, total_height::Int64, x::Float64, y::Float64)::Tuple{Float64,Float64}
+    # Recenter x/y 
+    recentered_x = x - (total_width / 2.0)
+    recentered_y = y - (total_height / 2.0)
+    max_r = sqrt((total_width/2)^2+(total_height/2)^2)
+    # Convert to polar coordinates
+    r, theta = sqrt(recentered_x^2 + recentered_y^2), atan(recentered_y, recentered_x)
+    # Transform with a swirl pattern
+    t_theta = theta + strength * sin(4.0*π*(r/(max_r))) * exp(-dropoff * r/max_r)
+    return (r * sin(t_theta) + (total_width / 2.0), r * cos(t_theta) + (total_height / 2.0))
 end
 
 function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
@@ -235,8 +249,11 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
         clamp.(1.0 .+ (randn((path.structure.width * path.structure.height)^level) * viz.polymerase_variance[level]),0.0, 5.0)
         for level in 1:path.structure.n_levels
     ]
+    plot_width = sum([viz.level_offsets[level] * path.structure.width for level in 1:path.structure.n_levels])
+    plot_height = sum([viz.level_offsets[level] * path.structure.height for level in 1:path.structure.n_levels])
+
     n_per_chromosome = ceil(Int64, ((path.structure.width * path.structure.height)^path.structure.n_levels) / viz.n_chromosomes)
-    Drawing(2*path.structure.width^path.structure.n_levels, 2*path.structure.height^path.structure.n_levels, filename)
+    Drawing(plot_width + 5, plot_height + 5, filename)
     setline(0.5)
     newpath()
     move(0,0)
@@ -259,11 +276,12 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
         y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],2], 1:path.structure.n_levels)
         x_loc = sum(x_offsets)
         y_loc = sum(y_offsets)
-        line(Point(x_loc, y_loc))
+        transformed = swirl_transform(viz.swirl_strength, viz.swirl_dropoff, plot_width, plot_height, x_loc, y_loc)
+        line(Point(transformed...))
 
         polymerase_rate = viz.polymerase_base_rate * prod(map(level->rnap_propensity[level][indicies[level]], 1:path.structure.n_levels))
         if rand() < polymerase_rate
-            push!(polymerase_accum, (x_loc,y_loc))
+            push!(polymerase_accum, transformed)
         end
     end
     do_action(:stroke)
