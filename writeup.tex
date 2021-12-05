@@ -1,0 +1,56 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[labelfont=bf]{caption}
+\usepackage[compact]{titlesec}
+\usepackage{graphicx,amsmath,booktabs,subcaption,placeins,mathtools,multirow} % All of the classics
+\usepackage[activate={true,nocompatibility},
+    final,
+    tracking=true,
+    kerning=true,
+    spacing=true,
+    factor=1100,
+    stretch=10,
+    shrink=10]{microtype}
+    \microtypecontext{spacing=nonfrench}
+\usepackage[hidelinks,draft=false]{hyperref}
+\usepackage[margin=1in]{geometry} % 1in margins
+\usepackage[version=4]{mhchem}
+
+% -- Use the Charter fonts as base fonts, fixup math-mode display
+\usepackage[charter]{mathdesign}
+\usepackage[scaled=.96,osf]{XCharter}
+\linespread{1.04}
+\usepackage[backend=biber,style=nature]{biblatex} %author-year for in-text content
+%\hyphenpenalty=750
+\usepackage{cleveref}
+%-------------------end standard preamble-------------------------
+\newcommand{\units}[2]{\frac{\text{#1}}{\text{#2}}\,}
+\newcommand{\unit}[1]{\; \text{#1}\,}
+
+ 
+\title{The scale of chromatin}
+\author{Christopher Johnstone}
+\date{}
+
+\addbibresource{main_library.bib}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+The scale of chromatin organization is immense; genomes are ordered semi-hierarchically across five orders of magnitude. The nucleus is a dense, dynamic location and exists at a scale that is hard to visualize. Most diagrams ``cheat'' by showing successive zoomed-in versions of a nucleus. What if we instead tried to directly visualize a chromosome, as it might exist in a nucleus?
+
+While the attached visualization is itself limited by the capabilities of modern printers and implies some artistic license, I aimed to visually represent \textit{(1)} one (small) chromosome, \textit{(2)} on a reasonably accurate length-scale, \textit{(3)} with nested contact domains that include \textit{(4)} a representation of relevant biological processes. On most modern printers, the minimum feature size is around 0.1mm, which sets many of the limitations in this printed, 2D representation.
+
+The final line drawing represents a single 58 megabase chromosome, with colors used to show the eight major contact domains that are formed here. The chromosome is a \emph{single} line (except for small gaps where the color changes between the major contact domains), which is folded hierarchically in four different length scales. Fifty thousand polymerases are scattered throughout the chromosome, with some regions of the chromosome being more transcriptionally active than other regions. Try to find a region that is practically quiescent!  When scaled to the size of a RNA polymerase, the diagram scale is around 24 microns by 24 microns. Small loop proteins, shown as purple ovals, also create some small-scale loop domains. 
+
+How accurate is this depiction? The major inaccuracies deal with the chromatin density and with the number of polymerases. When compared to an actual nucleus, the packing density of chromatin is roughly \emph{100-1000 times} denser, based on the overall length scales involved. Additionally, the average number of RNA polymerases in a mammalian cell nucleus is around eighty thousand polymerases, spread across all chromosomes, which means that our polymerase density is about 10-20 times too large. However, this increased polymerase count makes it easier to see the difference in polymerase activity across the genome. While this is an artistic reinterpretation of a nucleus, it also is not entirely discordant with reality.
+
+\section{Implementation}
+How do you generate a single line that must form structures across four orders of magnitude? This is ultimately a problem that is solved by creating paths that visit every square on grid, then recursively expanding each square to become its own grid, who then needs a new path that visits every square. The classic way to solve this is using depth first search, but this quickly becomes intractable for large grid sizes due to the inefficiency  of using a generic graph algorithm on a grid graph. There is a clever way to do this using a Monte Carlo simulation; luckily, in \textcite{mansfieldUnbiasedSamplingLattice2006}, such a sampling method was provided and proved to be ergodic. I implemented this in Julia, and then played with various visualization methods until I had a visualization strategy I thought told a story. Code is available at \url{https://github.com/meson800/chromatin-art}.
+
+The final vector version of the diagram is very large (35MB, but with several paths with more than a million nodes) and tends to crash software; however, the rasterized version is even larger (~600MB!), which means that print drivers often crash and weird memory limits show up in Acrobat and Illustrator when trying to print directly. The printed version brought to class is a decent printed version of the vector file, in all of its glory. A complicated dance that is responsible for rasterizing and splitting into tiles for posterization is required to get printable PDFs.
+
+\printbibliography
+\end{document}

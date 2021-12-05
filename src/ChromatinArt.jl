@@ -224,6 +224,7 @@ struct FractalViz
     swirl_dropoff::Float64
     n_chromosomes::Int64
     colors
+    skip_loops::Bool
 end
 
 function swirl_transform(strength::Float64, dropoff::Float64, total_width::Int64, total_height::Int64, x::Float64, y::Float64)::Tuple{Float64,Float64}
@@ -236,6 +237,20 @@ function swirl_transform(strength::Float64, dropoff::Float64, total_width::Int64
     # Transform with a swirl pattern
     t_theta = theta + strength * sin(4.0*π*(r/(max_r))) * exp(-dropoff * r/max_r)
     return (r * sin(t_theta) + (total_width / 2.0), r * cos(t_theta) + (total_height / 2.0))
+end
+
+function get_transformed_loc(idx::Int64, path::FractalPath, viz::FractalViz, plot_width, plot_height, jitter)
+    indicies = [path.paths[level][
+    ceil(Int64,idx / (
+        path.structure.width * 
+        path.structure.height)^(
+            path.structure.n_levels - level
+        ))] for level in 1:path.structure.n_levels]
+    x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],1], 1:path.structure.n_levels)
+    y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],2], 1:path.structure.n_levels)
+    x_loc = sum(x_offsets)
+    y_loc = sum(y_offsets)
+    return swirl_transform(viz.swirl_strength, viz.swirl_dropoff, plot_width, plot_height, x_loc, y_loc)
 end
 
 function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
@@ -266,18 +281,14 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
             setcolor(viz.colors[ceil(Int64, i / n_per_chromosome)])
             newpath()
         end
-        indicies = [path.paths[level][
-            ceil(Int64,i / (
-                path.structure.width * 
-                path.structure.height)^(
-                    path.structure.n_levels - level
-                ))] for level in 1:path.structure.n_levels]
-        x_offsets = map(idx->idx_to_zero_x(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],1], 1:path.structure.n_levels)
-        y_offsets = map(idx->idx_to_zero_y(path.structure.width,idx),indicies) .* viz.level_offsets + map(level->jitter[level][indicies[level],2], 1:path.structure.n_levels)
-        x_loc = sum(x_offsets)
-        y_loc = sum(y_offsets)
-        transformed = swirl_transform(viz.swirl_strength, viz.swirl_dropoff, plot_width, plot_height, x_loc, y_loc)
+        transformed = get_transformed_loc(i, path, viz, plot_width, plot_height, jitter)
         line(Point(transformed...))
+        indicies = [path.paths[level][
+        ceil(Int64,i / (
+            path.structure.width * 
+            path.structure.height)^(
+                path.structure.n_levels - level
+        ))] for level in 1:path.structure.n_levels]
 
         polymerase_rate = viz.polymerase_base_rate * prod(map(level->rnap_propensity[level][indicies[level]], 1:path.structure.n_levels))
         if rand() < polymerase_rate
@@ -285,9 +296,58 @@ function draw_fractal_path(path::FractalPath, viz::FractalViz, filename)
         end
     end
     do_action(:stroke)
+    
+    # Add loops at level n-1
+    if ~viz.skip_loops
+        gsave()
+        setcolor("#9e52e5")
+        setline(0.8)
+        potential_loop_idx = -1
+        for i in 2:(length(path.paths[end-1])-1)
+            # Reset if we are in a new subpath
+            if i % (path.structure.width * path.structure.height) == 0
+                potential_loop_idx = -1
+                continue
+            end
+            # Locate things like:
+            # ->
+            # <-
+            # within each segment
+            segment_diff = path.paths[end-1][i+1] - path.paths[end-1][i]
+            if potential_loop_idx == -1 && segment_diff == 1
+                potential_loop_idx = i
+            end
+
+
+            if potential_loop_idx != -1 && segment_diff == -1 && abs(path.paths[end-1][i+1] - path.paths[end-1][potential_loop_idx]) == path.structure.width
+                p1 = Point(get_transformed_loc(
+                    ((potential_loop_idx) * path.structure.width * path.structure.height),
+                    path, viz, plot_width, plot_height, jitter))
+                p2 = Point(get_transformed_loc(
+                    ((potential_loop_idx) * path.structure.width * path.structure.height) + 1,
+                    path, viz, plot_width, plot_height, jitter))
+                p3 = Point(get_transformed_loc(
+                    (i * path.structure.width * path.structure.height),
+                    path, viz, plot_width, plot_height, jitter))
+                p4 = Point(get_transformed_loc(
+                    (i * path.structure.width * path.structure.height) + 1,
+                    path, viz, plot_width, plot_height, jitter))
+                # Skip if the distance between points is out of the desired range
+                if sqrt((p1[1] - p4[1])^2 + (p1[2] - p4[2])^2) > 3
+                    potential_loop_idx = -1
+                    continue
+                end
+                # We got a loop! Generate it!
+                ellipseinquad([p1, p2, p3, p4], :stroke)
+                potential_loop_idx = -1
+            end
+        end
+        grestore()
+    end
 
     # Place polymerases
     gsave()
+    print("# polymerases:", length(polymerase_accum), "\n")
     for polymerase_loc in polymerase_accum
         setcolor(0.4,0.4,0.4,0.6)
         circle(polymerase_loc...,0.7,:fill)
