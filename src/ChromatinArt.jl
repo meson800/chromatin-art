@@ -1,3 +1,4 @@
+# Copyright Christopher Johnstone (2021) under the MIT license.
 module ChromatinArt
 
 using Random
